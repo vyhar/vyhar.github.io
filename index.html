@@ -1109,7 +1109,6 @@ function snapshotFrom(packagesArr) {
 
 // ---------- Archive State ----------
 let importedPackages = [];
-let archivedWeeks = [];
 
 // ---------- Import ----------
 function importWeekData(json) {
@@ -1156,7 +1155,7 @@ function archiveImportedWeek(customDate) {
 // ---------- Archive Current Week ----------
 function archiveCurrentWeek() {
   const key = weekKey(new Date());
-  const snap = currentSnapshot();
+  const snap = snapshotFrom(packages);
 
   const idx = archivedWeeks.findIndex(w => w.key === key);
   const entry = {
