@@ -360,8 +360,16 @@
 
       <div class="card">
         <div class="card-title">Add tracking numbers</div>
-        <textarea class="input-field input-mono" id="tracking-input" placeholder="Paste tracking numbers, one per line&#10;9400111899223397990000&#10;9400111899223397991111"></textarea>
-        <div class="btn-row">
+        <textarea class="input-field input-mono" id="tracking-input" placeholder="Paste tracking numbers, one per line"></textarea>
+        <div style="margin-top:10px;">
+  			<input 
+    		type="datetime-local" 
+    		class="input-field" 
+    		id="accepted-input"
+    		placeholder="Set accepted date/time (optional)"
+  			/>
+		</div>
+		  <div class="btn-row">
           <button class="btn btn-primary" onclick="addTrackingNumbers()">Track packages</button>
           <button class="btn" onclick="refreshAll()">↻ Refresh all</button>
           <button class="btn" onclick="clearDelivered()">Clear delivered</button>
@@ -722,21 +730,13 @@ function transitDays(accepted, delivered) {
   return +((new Date(delivered)-new Date(accepted))/86400000).toFixed(2);
 }
 
-function buildPkg(num, tracker) {
+function buildPkg(num, tracker, manualAccepted) {
   const status = parseStatus(tracker);
 
-  let accepted = getAccepted(tracker);
-
-  // 👇 ADD YOUR EDIT HERE
-  if (accepted) {
-    const d = new Date(accepted);
-
-    // example: subtract 2 hours
-    d.setHours(d.getHours() - 2);
-
-    accepted = d.toISOString();
-  }
-
+ let accepted = manualAccepted 
+  ? new Date(manualAccepted).toISOString()
+  : getAccepted(tracker);
+	
   const delivered = status==='delivered' ? getDelivered(tracker) : null;
   const destState = getDestState(tracker);
 
@@ -755,9 +755,11 @@ function buildPkg(num, tracker) {
 // ─────────────────────────────────────────────
 // ACTIONS
 // ─────────────────────────────────────────────
-async function addTrackingNumbers() {
+
+	async function addTrackingNumbers() {
   if(!apiKey){ toast('Set your API key in Settings first.','error'); showPanel('settings'); return; }
   const raw = document.getElementById('tracking-input').value;
+		const manualAccepted = document.getElementById('accepted-input').value;
   const nums = [...new Set(raw.split('\n').map(s=>s.trim()).filter(Boolean))];
   if(!nums.length){ toast('Enter at least one tracking number.','error'); return; }
 
@@ -773,7 +775,7 @@ async function addTrackingNumbers() {
 
     try {
       const tracker = await createTracker(num);
-      packages.push(buildPkg(num, tracker));
+      packages.push(buildPkg(num, tracker, manualAccepted));
       added++;
       addLog('Tracked: '+num+' → '+parseStatus(tracker));
     } catch(e) {
