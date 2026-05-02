@@ -1102,15 +1102,12 @@ function weekKey(date) {
 
 function weekLabel(key) {
   const d = new Date(key + 'T00:00:00');
-  const end = new Date(d);
-  end.setDate(d.getDate() + 6);
 
-  const fmt = dt => dt.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
+    year: 'numeric'
   });
-
-  return fmt(d) + ' – ' + fmt(end);
 }
 
 // ---------- Snapshot ----------
@@ -1152,7 +1149,7 @@ function archiveImportedWeek(customDate) {
     return;
   }
 
-  const key = weekKey(customDate || new Date());
+  const key = (customDate || new Date()).toISOString().slice(0, 10);
 
   if (archivedWeeks.find(w => w.key === key)) {
     if (!confirm('Week already exists. Overwrite?')) return;
