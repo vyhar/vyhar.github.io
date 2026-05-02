@@ -1068,47 +1068,76 @@ function renderMapTables() {
 // ─────────────────────────────────────────────
 // HISTORY
 // ─────────────────────────────────────────────
+// ---------- Date Helpers ----------
 function weekKey(date) {
   const d = new Date(date);
   const mon = new Date(d);
-  mon.setDate(d.getDate()-((d.getDay()+6)%7));
-  return mon.toISOString().slice(0,10);
-}
-function weekLabel(key) {
-  const d = new Date(key+'T00:00:00');
-  const end = new Date(d); end.setDate(d.getDate()+6);
-  const fmt = dt => dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-  return fmt(d)+' – '+fmt(end);
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return mon.toISOString().slice(0, 10);
 }
 
+function weekLabel(key) {
+  const d = new Date(key + 'T00:00:00');
+  const end = new Date(d);
+  end.setDate(d.getDate() + 6);
+
+  const fmt = dt => dt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+
+  return fmt(d) + ' – ' + fmt(end);
+}
+
+// ---------- Snapshot ----------
 function snapshotFrom(packagesArr) {
-  const delivered = packagesArr.filter(p=>p.status==='delivered');
-  const days = delivered.filter(p=>p.days!=null).map(p=>p.days);
+  const delivered = packagesArr.filter(p => p.status === 'delivered');
+  const days = delivered
+    .filter(p => p.days != null)
+    .map(p => p.days);
 
   return {
     total: packagesArr.length,
     delivered: delivered.length,
-    avgDays: days.length ? +(days.reduce((a,b)=>a+b,0)/days.length).toFixed(2) : null,
+    avgDays: days.length
+      ? +(days.reduce((a, b) => a + b, 0) / days.length).toFixed(2)
+      : null,
     fastest: days.length ? +Math.min(...days).toFixed(2) : null,
     slowest: days.length ? +Math.max(...days).toFixed(2) : null
   };
 }
-	function archiveImportedWeek(customDate) {
+
+// ---------- Archive State ----------
+let importedPackages = [];
+let archivedWeeks = [];
+
+// ---------- Import ----------
+function importWeekData(json) {
+  try {
+    importedPackages = JSON.parse(json);
+    toast('Imported dataset ready to archive.', 'success');
+    addLog(`Imported dataset (${importedPackages.length} packages)`);
+  } catch (e) {
+    toast('Invalid JSON import.', 'error');
+  }
+}
+
+// ---------- Archive Imported Week ----------
+function archiveImportedWeek(customDate) {
   if (!importedPackages.length) {
     toast('No imported data to archive.', 'error');
     return;
   }
-		function archiveCurrentWeek() {
-  const key = weekKey(new Date());
-  const snap = snapshotFrom(packages);
-  ...
-}
-		if (archivedWeeks.find(w => w.key === key)) {
-  if (!confirm('Week already exists. Overwrite?')) return;
-}
 
   const key = weekKey(customDate || new Date());
+
+  if (archivedWeeks.find(w => w.key === key)) {
+    if (!confirm('Week already exists. Overwrite?')) return;
+  }
+
   const snap = snapshotFrom(importedPackages);
+
+  archivedWeeks = archivedWeeks.filter(w => w.key !== key);
 
   archivedWeeks.push({
     key,
@@ -1117,116 +1146,160 @@ function snapshotFrom(packagesArr) {
     source: 'import'
   });
 
-  archivedWeeks.sort((a,b)=>b.key.localeCompare(a.key));
+  archivedWeeks.sort((a, b) => b.key.localeCompare(a.key));
   persist();
 
   toast('Imported week archived.', 'success');
   addLog('Archived imported week: ' + weekLabel(key));
 }
 
+// ---------- Archive Current Week ----------
 function archiveCurrentWeek() {
   const key = weekKey(new Date());
   const snap = currentSnapshot();
-  const idx = archivedWeeks.findIndex(w=>w.key===key);
-  const entry = {key, snap, archived:new Date().toISOString()};
-  if(idx>=0) archivedWeeks[idx]=entry; else archivedWeeks.push(entry);
-  archivedWeeks.sort((a,b)=>b.key.localeCompare(a.key));
+
+  const idx = archivedWeeks.findIndex(w => w.key === key);
+  const entry = {
+    key,
+    snap,
+    archived: new Date().toISOString()
+  };
+
+  if (idx >= 0) {
+    archivedWeeks[idx] = entry;
+  } else {
+    archivedWeeks.push(entry);
+  }
+
+  archivedWeeks.sort((a, b) => b.key.localeCompare(a.key));
   persist();
   renderHistory();
-  toast('Week archived: '+weekLabel(key),'success');
-  addLog('Archived week: '+weekLabel(key));
+
+  toast('Week archived: ' + weekLabel(key), 'success');
+  addLog('Archived week: ' + weekLabel(key));
 }
 
+// ---------- Render History ----------
 function renderHistory() {
   const selA = document.getElementById('sel-week-a');
   const selB = document.getElementById('sel-week-b');
-  const prevA = selA.value, prevB = selB.value;
-  const opts = archivedWeeks.map(w=>`<option value="${w.key}">${weekLabel(w.key)}</option>`).join('');
-  selA.innerHTML = '<option value="">Week A</option>'+opts;
-  selB.innerHTML = '<option value="">Week B</option>'+opts;
-  if(prevA) selA.value=prevA;
-  if(prevB) selB.value=prevB;
+
+  const prevA = selA.value;
+  const prevB = selB.value;
+
+  const opts = archivedWeeks
+    .map(w => `<option value="${w.key}">${weekLabel(w.key)}</option>`)
+    .join('');
+
+  selA.innerHTML = '<option value="">Week A</option>' + opts;
+  selB.innerHTML = '<option value="">Week B</option>' + opts;
+
+  if (prevA) selA.value = prevA;
+  if (prevB) selB.value = prevB;
 
   const tbody = document.getElementById('archive-tbody');
-  if(!archivedWeeks.length) {
-    tbody.innerHTML='<tr><td colspan="7"><div class="empty-state" style="padding:16px;">No archived weeks yet.</div></td></tr>';
-  } else {
-    tbody.innerHTML = archivedWeeks.map(w=>`
+
+  if (!archivedWeeks.length) {
+    tbody.innerHTML = `
       <tr>
-        <td style="font-weight:500;">${weekLabel(w.key)}</td>
-        <td>${w.snap.total}</td>
-        <td>${w.snap.delivered}</td>
-        <td>${w.snap.avgDays!=null?w.snap.avgDays.toFixed(1)+'d':'—'}</td>
-        <td style="color:var(--green);">${w.snap.fastest!=null?w.snap.fastest.toFixed(1)+'d':'—'}</td>
-        <td style="color:var(--red);">${w.snap.slowest!=null?w.snap.slowest.toFixed(1)+'d':'—'}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="deleteArchive('${w.key}')">Delete</button></td>
-      </tr>`).join('');
+        <td colspan="7">
+          <div class="empty-state" style="padding:16px;">
+            No archived weeks yet.
+          </div>
+        </td>
+      </tr>`;
+  } else {
+    tbody.innerHTML = archivedWeeks
+      .map(w => `
+        <tr>
+          <td style="font-weight:500;">${weekLabel(w.key)}</td>
+          <td>${w.snap.total}</td>
+          <td>${w.snap.delivered}</td>
+          <td>${w.snap.avgDays != null ? w.snap.avgDays.toFixed(1) + 'd' : '—'}</td>
+          <td style="color:var(--green);">${w.snap.fastest != null ? w.snap.fastest.toFixed(1) + 'd' : '—'}</td>
+          <td style="color:var(--red);">${w.snap.slowest != null ? w.snap.slowest.toFixed(1) + 'd' : '—'}</td>
+          <td>
+            <button class="btn btn-sm btn-danger" onclick="deleteArchive('${w.key}')">
+              Delete
+            </button>
+          </td>
+        </tr>`)
+      .join('');
   }
+
   renderComparison();
 }
 
+// ---------- Comparison ----------
 function renderComparison() {
   const keyA = document.getElementById('sel-week-a').value;
   const keyB = document.getElementById('sel-week-b').value;
   const area = document.getElementById('comparison-area');
-  if(!keyA||!keyB) {
-    area.innerHTML='<div class="empty-state">Select two weeks above to compare side by side.</div>';
+
+  if (!keyA || !keyB) {
+    area.innerHTML = '<div class="empty-state">Select two weeks above to compare.</div>';
     return;
   }
-  const wA = archivedWeeks.find(w=>w.key===keyA);
-  const wB = archivedWeeks.find(w=>w.key===keyB);
-  if(!wA||!wB) return;
+
+  const wA = archivedWeeks.find(w => w.key === keyA);
+  const wB = archivedWeeks.find(w => w.key === keyB);
+
+  if (!wA || !wB) return;
 
   const cmpCard = (label, a, b, higherBetter) => {
-    const diff = (a!=null&&b!=null) ? a-b : null;
-    const fmt = v => v!=null ? (Number.isInteger(v)?v:v.toFixed(1)) : '—';
-    let deltaCls='delta-same', deltaLabel='—';
-    if(diff!=null && Math.abs(diff)>0.005) {
-      const better = higherBetter ? diff>0 : diff<0;
-      deltaCls = better?'delta-up':'delta-down';
-      deltaLabel = (diff>0?'+':'')+diff.toFixed(1);
+    const diff = (a != null && b != null) ? a - b : null;
+
+    let deltaCls = 'delta-same';
+    let deltaLabel = '—';
+
+    if (diff != null && Math.abs(diff) > 0.005) {
+      const better = higherBetter ? diff > 0 : diff < 0;
+      deltaCls = better ? 'delta-up' : 'delta-down';
+      deltaLabel = (diff > 0 ? '+' : '') + diff.toFixed(1);
     }
-    return `<div class="cmp-card">
-      <div class="cmp-label">${label}</div>
-      <div class="cmp-vals">
-        <span class="cmp-a">${fmt(a)}</span>
-        <span class="cmp-b">vs ${fmt(b)}</span>
-      </div>
-      <span class="cmp-delta ${deltaCls}">${deltaLabel}</span>
-    </div>`;
+
+    const fmt = v => v != null ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—';
+
+    return `
+      <div class="cmp-card">
+        <div class="cmp-label">${label}</div>
+        <div class="cmp-vals">
+          <span class="cmp-a">${fmt(a)}</span>
+          <span class="cmp-b">vs ${fmt(b)}</span>
+        </div>
+        <span class="cmp-delta ${deltaCls}">${deltaLabel}</span>
+      </div>`;
   };
 
   area.innerHTML = `
     <div style="margin-bottom:10px;font-size:12px;color:var(--muted);">
-      <strong style="color:var(--text);">${weekLabel(keyA)}</strong> vs <strong style="color:var(--text);">${weekLabel(keyB)}</strong>
+      <strong>${weekLabel(keyA)}</strong> vs <strong>${weekLabel(keyB)}</strong>
     </div>
     <div class="week-compare-grid">
-      ${cmpCard('Packages tracked',wA.snap.total,wB.snap.total,true)}
-      ${cmpCard('Delivered',wA.snap.delivered,wB.snap.delivered,true)}
-      ${cmpCard('Avg transit days',wA.snap.avgDays,wB.snap.avgDays,false)}
-      ${cmpCard('Fastest delivery',wA.snap.fastest,wB.snap.fastest,false)}
+      ${cmpCard('Packages tracked', wA.snap.total, wB.snap.total, true)}
+      ${cmpCard('Delivered', wA.snap.delivered, wB.snap.delivered, true)}
+      ${cmpCard('Avg transit days', wA.snap.avgDays, wB.snap.avgDays, false)}
+      ${cmpCard('Fastest delivery', wA.snap.fastest, wB.snap.fastest, false)}
     </div>`;
 }
 
-async function deleteArchive(key) {
-  archivedWeeks = archivedWeeks.filter(w=>w.key!==key);
-  persist(); renderHistory(); toast('Archive deleted.');
+// ---------- Delete / Clear ----------
+function deleteArchive(key) {
+  archivedWeeks = archivedWeeks.filter(w => w.key !== key);
+  persist();
+  renderHistory();
+  toast('Archive deleted.');
 }
 
-async function clearAllHistory() {
-  if(!confirm('Delete all archived weeks?')) return;
-  archivedWeeks=[]; persist(); renderHistory(); toast('History cleared.');
+function clearAllHistory() {
+  if (!confirm('Delete all archived weeks?')) return;
+
+  archivedWeeks = [];
+  persist();
+  renderHistory();
+  toast('History cleared.');
 }
-let importedPackages = [];
-	function importWeekData(json) {
-  try {
-    importedPackages = JSON.parse(json);
-    toast('Imported dataset ready to archive.', 'success');
-    addLog('Imported dataset (' + importedPackages.length + ' packages)');
-  } catch (e) {
-    toast('Invalid JSON import.', 'error');
-  }
-}
+
 // ─────────────────────────────────────────────
 // SETTINGS
 // ─────────────────────────────────────────────
