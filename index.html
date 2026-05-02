@@ -495,7 +495,28 @@
         </div>
         <div id="comparison-area"><div class="empty-state">Archive weeks above, then pick two to compare.</div></div>
       </div>
+<hr class="section-divider">
 
+<div class="card">
+  <div class="card-title">Import previous week</div>
+
+  <textarea id="import-json" class="input-field input-mono"
+    placeholder="Paste JSON export of packages here"></textarea>
+
+  <div style="margin-top:10px;">
+    <input type="date" id="import-week-date" class="input-field">
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="importWeekData(document.getElementById('import-json').value)">
+      Load import
+    </button>
+
+    <button class="btn btn-accent" onclick="archiveImportedWeek(document.getElementById('import-week-date').value)">
+      Archive imported week
+    </button>
+  </div>
+</div>
       <div class="card">
         <div class="card-title">All archived weeks</div>
         <table class="data-table">
