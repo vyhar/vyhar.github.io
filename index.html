@@ -724,13 +724,29 @@ function transitDays(accepted, delivered) {
 
 function buildPkg(num, tracker) {
   const status = parseStatus(tracker);
-  const accepted = getAccepted(tracker);
+
+  let accepted = getAccepted(tracker);
+
+  // 👇 ADD YOUR EDIT HERE
+  if (accepted) {
+    const d = new Date(accepted);
+
+    // example: subtract 2 hours
+    d.setHours(d.getHours() - 2);
+
+    accepted = d.toISOString();
+  }
+
   const delivered = status==='delivered' ? getDelivered(tracker) : null;
   const destState = getDestState(tracker);
+
   return {
     trackingNum: num,
     trackerId: tracker.id,
-    status, accepted, delivered, destState,
+    status,
+    accepted,
+    delivered,
+    destState,
     days: transitDays(accepted, delivered),
     lastUpdated: new Date().toISOString()
   };
