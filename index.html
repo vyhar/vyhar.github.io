@@ -1081,16 +1081,47 @@ function weekLabel(key) {
   return fmt(d)+' – '+fmt(end);
 }
 
-function currentSnapshot() {
-  const delivered = packages.filter(p=>p.status==='delivered');
+function snapshotFrom(packagesArr) {
+  const delivered = packagesArr.filter(p=>p.status==='delivered');
   const days = delivered.filter(p=>p.days!=null).map(p=>p.days);
+
   return {
-    total: packages.length,
+    total: packagesArr.length,
     delivered: delivered.length,
     avgDays: days.length ? +(days.reduce((a,b)=>a+b,0)/days.length).toFixed(2) : null,
     fastest: days.length ? +Math.min(...days).toFixed(2) : null,
     slowest: days.length ? +Math.max(...days).toFixed(2) : null
   };
+}
+	function archiveImportedWeek(customDate) {
+  if (!importedPackages.length) {
+    toast('No imported data to archive.', 'error');
+    return;
+  }
+		function archiveCurrentWeek() {
+  const key = weekKey(new Date());
+  const snap = snapshotFrom(packages);
+  ...
+}
+		if (archivedWeeks.find(w => w.key === key)) {
+  if (!confirm('Week already exists. Overwrite?')) return;
+}
+
+  const key = weekKey(customDate || new Date());
+  const snap = snapshotFrom(importedPackages);
+
+  archivedWeeks.push({
+    key,
+    snap,
+    archived: new Date().toISOString(),
+    source: 'import'
+  });
+
+  archivedWeeks.sort((a,b)=>b.key.localeCompare(a.key));
+  persist();
+
+  toast('Imported week archived.', 'success');
+  addLog('Archived imported week: ' + weekLabel(key));
 }
 
 function archiveCurrentWeek() {
@@ -1186,7 +1217,16 @@ async function clearAllHistory() {
   if(!confirm('Delete all archived weeks?')) return;
   archivedWeeks=[]; persist(); renderHistory(); toast('History cleared.');
 }
-
+let importedPackages = [];
+	function importWeekData(json) {
+  try {
+    importedPackages = JSON.parse(json);
+    toast('Imported dataset ready to archive.', 'success');
+    addLog('Imported dataset (' + importedPackages.length + ' packages)');
+  } catch (e) {
+    toast('Invalid JSON import.', 'error');
+  }
+}
 // ─────────────────────────────────────────────
 // SETTINGS
 // ─────────────────────────────────────────────
