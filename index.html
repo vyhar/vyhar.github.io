@@ -707,6 +707,12 @@ function getDestState(tracker) {
     const match = addr.match(/\b[A-Z]{2}\b/);
     if (match) return match[0];
   }
+	 if (tracker.tracking_details) {
+    for (let d of tracker.tracking_details.reverse()) {
+      const loc = d.tracking_location;
+      if (loc?.state) return loc.state;
+    }
+  }
 
   // 2. Try tracking_details (sometimes contains location scans)
   const details = tracker.tracking_details || [];
@@ -783,7 +789,7 @@ function buildPkg(num, tracker, manualAccepted) {
     }
 
     // ✅ ADD THIS DELAY (important)
-    await new Promise(resolve => setTimeout(resolve, 2000)); // 1 second
+    await new Promise(resolve => setTimeout(resolve, 1600)); // 1 second
   }
 
   setSpinner(false);
