@@ -1149,14 +1149,29 @@ function archiveImportedWeek(customDate) {
     return;
   }
 
-  const key = (customDate || new Date()).toISOString().slice(0, 10);
+  // ✅ SAFE DATE HANDLING
+  let dateObj;
+  if (!customDate) {
+    dateObj = new Date();
+  } else {
+    dateObj = new Date(customDate);
+  }
 
+  if (isNaN(dateObj)) {
+    toast('Please select a valid date.', 'error');
+    return;
+  }
+
+  const key = dateObj.toISOString().slice(0, 10);
+
+  // ✅ OVERWRITE CHECK
   if (archivedWeeks.find(w => w.key === key)) {
     if (!confirm('Week already exists. Overwrite?')) return;
   }
 
   const snap = snapshotFrom(importedPackages);
 
+  // remove existing same key
   archivedWeeks = archivedWeeks.filter(w => w.key !== key);
 
   archivedWeeks.push({
@@ -1168,6 +1183,8 @@ function archiveImportedWeek(customDate) {
 
   archivedWeeks.sort((a, b) => b.key.localeCompare(a.key));
   persist();
+
+  renderHistory(); // ✅ THIS WAS MISSING
 
   toast('Imported week archived.', 'success');
   addLog('Archived imported week: ' + weekLabel(key));
