@@ -451,11 +451,10 @@
           <div class="empty-state" id="map-loading">Loading map…</div>
         </div>
         <div class="map-legend">
-          <span><span class="legend-swatch" style="background:#22c55e;"></span>Fast &lt;2d</span>
-          <span><span class="legend-swatch" style="background:#84cc16;"></span>2–3d</span>
-          <span><span class="legend-swatch" style="background:#eab308;"></span>3–4d</span>
-          <span><span class="legend-swatch" style="background:#f97316;"></span>4–5d</span>
-          <span><span class="legend-swatch" style="background:#ef4444;"></span>Slow &gt;5d</span>
+          <span><span class="legend-swatch" style="background:#22c55e;"></span>Fast &lt;1d</span>
+          <span><span class="legend-swatch" style="background:#ff9800;"></span>2</span>
+          <span><span class="legend-swatch" style="background:#f44336;"></span>3</span>
+          <span><span class="legend-swatch" style="background:#f44336;"></span>Slow &gt;3d</span>
           <span><span class="legend-swatch" style="background:#e5e7eb;border:1px solid #d1d5db;"></span>No data</span>
         </div>
 
@@ -984,11 +983,10 @@ function getStateData() {
 }
 
 function speedColor(days) {
-  if(days<2) return '#22c55e';
-  if(days<3) return '#84cc16';
-  if(days<4) return '#eab308';
-  if(days<5) return '#f97316';
-  return '#ef4444';
+  if(days<1) return '#22c55e';
+  if(days<2) return '#ff9800';
+  if(days<3) return '#f44336';
+  return '#f44336';
 }
 
 async function initMap() {
