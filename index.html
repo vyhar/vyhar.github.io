@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USPS Shipping Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0ede8;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.06);
+    --text: #1a1814;
+    --muted: #7a7670;
+    --accent: #1a4fd6;
+    --accent-light: #e8eefb;
+    --green: #15803d;
+    --green-bg: #dcfce7;
+    --amber: #92400e;
+    --amber-bg: #fef3c7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --blue-txt: #1e40af;
+    --blue-bg: #dbeafe;
+    --navy: #0f1f45;
+    --font-body: 'Sora', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --r: 10px;
+    --r-sm: 6px;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* LAYOUT */
+  .app-shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--navy);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 10;
+  }
+
+  .sidebar-logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .sidebar-logo .logo-mark {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .sidebar-logo .logo-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.2;
+  }
+
+  .sidebar-nav { padding: 16px 12px; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-item:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.06); }
+  .nav-item.active { color: #fff; background: rgba(255,255,255,0.12); }
+  .nav-icon { width: 16px; text-align: center; flex-shrink: 0; }
+
+  .sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    font-family: var(--font-mono);
+  }
+  #api-status-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: #ef4444; margin-right: 6px; vertical-align: middle;
+  }
+  #api-status-dot.connected { background: #22c55e; }
+
+  .main-content {
+    margin-left: 220px;
+    flex: 1;
+    padding: 32px;
+    max-width: 1200px;
+  }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .page-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--r);
+    padding: 16px 20px;
+  }
+  .metric-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 600; color: var(--text); line-height: 1; }
+  .metric-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* TABLE */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    text-align: left; padding: 8px 12px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border2);
+  }
+  .data-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border2);
+    font-size: 13px;
+    color: var(--text);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--surface2); }
+
+  /* BADGES */
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; border-radius: 99px;
+    font-size: 11px; font-weight: 600;
+    font-family: var(--font-body);
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-blue { background: var(--blue-bg); color: var(--blue-txt); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-gray { background: var(--surface2); color: var(--muted); }
+
+  /* INPUTS */
+  .input-field {
+    width: 100%; padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    font-family: var(--font-body);
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text);
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  .input-field:focus { border-color: var(--accent); }
+  .input-mono { font-family: var(--font-mono); }
+
+  textarea.input-field { resize: vertical; min-height: 100px; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 9px 18px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .btn-primary:hover { background: #1a3060; }
+  .btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-accent:hover { background: #1540b8; }
+  .btn-danger { background: var(--red-bg); color: var(--red); border-color: #fca5a5; }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+  /* SPINNER */
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* MONO TEXT */
+  .mono { font-family: var(--font-mono); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .empty-state .es-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.4; }
+
+  /* TOAST */
+  #toast-root {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 999;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 12px 18px;
+    font-size: 13px;
+    max-width: 320px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn { from { transform: translateY(8px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  .toast-success { border-left: 3px solid #22c55e; }
+  .toast-error { border-left: 3px solid #ef4444; }
+  .toast-info { border-left: 3px solid var(--accent); }
+
+  /* CHARTS */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .chart-wrap { position: relative; height: 200px; }
+
+  /* MAP */
+  #map-svg-wrap { width: 100%; background: var(--surface2); border-radius: var(--r-sm); overflow: hidden; min-height: 340px; }
+  #map-svg-wrap svg { display: block; }
+
+  .map-legend { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+  .state-table-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+  /* HISTORY */
+  .week-compare-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .cmp-card { background: var(--surface2); border-radius: var(--r-sm); padding: 14px 16px; }
+  .cmp-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .cmp-vals { display: flex; align-items: baseline; gap: 8px; }
+  .cmp-a { font-size: 22px; font-weight: 600; }
+  .cmp-b { font-size: 13px; color: var(--muted); }
+  .cmp-delta { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; margin-top: 4px; display: inline-block; }
+  .delta-up { background: var(--green-bg); color: var(--green); }
+  .delta-down { background: var(--red-bg); color: var(--red); }
+  .delta-same { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+  .settings-form { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; align-items: center; max-width: 520px; }
+  .settings-label { font-size: 13px; color: var(--muted); }
+
+  .log-box { font-family: var(--font-mono); font-size: 11px; color: var(--muted); max-height: 180px; overflow-y: auto; background: var(--surface2); border-radius: var(--r-sm); padding: 12px; line-height: 1.8; }
+
+  .section-divider { border: none; border-top: 1px solid var(--border2); margin: 20px 0; }
+
+  .week-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .week-controls select { padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-body); font-size: 13px; background: var(--surface); color: var(--text); }
+
+  .tooltip-popup {
+    position: fixed; pointer-events: none;
+    background: var(--navy); color: #fff;
+    font-size: 12px; padding: 6px 12px;
+    border-radius: var(--r-sm);
+    font-family: var(--font-body);
+    z-index: 100;
+    white-space: nowrap;
+    display: none;
+  }
+
+  .progress-line { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">USPS Tracker</div>
+      <div class="logo-name">ShipSight</div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item active" onclick="showPanel('track')" id="nav-track">
+        <span class="nav-icon">📦</span> Track packages
+      </button>
+      <button class="nav-item" onclick="showPanel('dashboard')" id="nav-dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </button>
+      <button class="nav-item" onclick="showPanel('map')" id="nav-map">
+        <span class="nav-icon">🗺</span> State map
+      </button>
+      <button class="nav-item" onclick="showPanel('history')" id="nav-history">
+        <span class="nav-icon">🕐</span> Week history
+      </button>
+      <button class="nav-item" onclick="showPanel('settings')" id="nav-settings">
+        <span class="nav-icon">⚙</span> Settings
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <span id="api-status-dot"></span>
+      <span id="api-status-text">API key not set</span>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="main-content">
+
+    <!-- TRACK PANEL -->
+    <div class="panel active" id="panel-track">
+      <div class="page-title">Track packages</div>
+      <div class="page-sub">Add USPS tracking numbers to monitor via EasyPost</div>
+
+      <div class="card">
+        <div class="card-title">Add tracking numbers</div>
+        <textarea class="input-field input-mono" id="tracking-input" placeholder="Paste tracking numbers, one per line&#10;9400111899223397990000&#10;9400111899223397991111"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addTrackingNumbers()">Track packages</button>
+          <button class="btn" onclick="refreshAll()">↻ Refresh all</button>
+          <button class="btn" onclick="clearDelivered()">Clear delivered</button>
+		   <button class="btn" onclick="clearInTransit()">Clear in transit</button>
+          <span id="track-spinner" style="display:none;"><span class="spinner"></span> <span id="spinner-label" style="font-size:12px;color:var(--muted);">Working…</span></span>
+        </div>
+        <div id="progress-bar-wrap" style="display:none;">
+          <div class="progress-line"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="progress-label"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin:0;">Active shipments &nbsp;<span style="font-weight:400;color:var(--muted);" id="pkg-count-label">(0)</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;" id="status-counts"></div>
+        </div>
+        <table class="data-table" id="pkg-table">
+          <thead>
+            <tr>
+              <th>Tracking number</th>
+              <th>Status</th>
+              <th>Accepted</th>
+              <th>Delivered</th>
+              <th>Transit</th>
+              <th>Dest state</th>
+            </tr>
+          </thead>
+          <tbody id="pkg-tbody">
+            <tr><td colspan="6"><div class="empty-state"><div class="es-icon">📭</div>No packages yet. Add tracking numbers above.</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DASHBOARD PANEL -->
+    <div class="panel" id="panel-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">Delivery analytics for all tracked packages</div>
+
+      <div class="metric-grid">
+        <div class="metric-card"><div class="metric-label">Total tracked</div><div class="metric-value" id="d-total">0</div></div>
+        <div class="metric-card"><div class="metric-label">Delivered</div><div class="metric-value" id="d-delivered">0</div><div class="metric-sub" id="d-rate">—</div></div>
+        <div class="metric-card"><div class="metric-label">Avg transit</div><div class="metric-value" id="d-avg">—</div><div class="metric-sub">days</div></div>
+        <div class="metric-card"><div class="metric-label">Fastest delivery</div><div class="metric-value" id="d-fastest">—</div><div class="metric-sub">days</div></div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="card" style="margin-bottom:0;">
+          <div class="card-title">Transit time distribution</div>
+          <div class="chart-wrap"><canvas id="chart-transit" role="img" aria-label="Transit time distribution by day count"></canvas></div>
+        </div>
+        <div class="card" style="margin-bottom:0;">
+          <div class="card-title">Avg transit by acceptance day</div>
+          <div class="chart-wrap"><canvas id="chart-dow" role="img" aria-label="Average transit days by day of week accepted"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">Delivered packages</div>
+        <table class="data-table">
+          <thead>
+            <tr><th>Tracking number</th><th>Accepted</th><th>Delivered</th><th>Transit days</th><th>Dest state</th></tr>
+          </thead>
+          <tbody id="delivered-tbody">
+            <tr><td colspan="5"><div class="empty-state">No delivered packages yet.</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MAP PANEL -->
+    <div class="panel" id="panel-map">
+      <div class="page-title">State speed map</div>
+      <div class="page-sub">Average transit days to each destination state — green is fastest, red is slowest</div>
+
+      <div class="card">
+        <div id="map-svg-wrap">
+          <div class="empty-state" id="map-loading">Loading map…</div>
+        </div>
+        <div class="map-legend">
+          <span><span class="legend-swatch" style="background:#22c55e;"></span>Fast &lt;2d</span>
+          <span><span class="legend-swatch" style="background:#84cc16;"></span>2–3d</span>
+          <span><span class="legend-swatch" style="background:#eab308;"></span>3–4d</span>
+          <span><span class="legend-swatch" style="background:#f97316;"></span>4–5d</span>
+          <span><span class="legend-swatch" style="background:#ef4444;"></span>Slow &gt;5d</span>
+          <span><span class="legend-swatch" style="background:#e5e7eb;border:1px solid #d1d5db;"></span>No data</span>
+        </div>
+
+        <hr class="section-divider">
+        <div class="card-title">State breakdown</div>
+        <div class="state-table-grid">
+          <div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;">⚡ Fastest states</div>
+            <table class="data-table" id="fastest-states-table">
+              <thead><tr><th>State</th><th>Pkgs</th><th>Avg days</th></tr></thead>
+              <tbody id="fastest-tbody"><tr><td colspan="3"><div class="empty-state" style="padding:12px;">No data</div></td></tr></tbody>
+            </table>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px;">🐢 Slowest states</div>
+            <table class="data-table" id="slowest-states-table">
+              <thead><tr><th>State</th><th>Pkgs</th><th>Avg days</th></tr></thead>
+              <tbody id="slowest-tbody"><tr><td colspan="3"><div class="empty-state" style="padding:12px;">No data</div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY PANEL -->
+    <div class="panel" id="panel-history">
+      <div class="page-title">Week history</div>
+      <div class="page-sub">Archive weekly snapshots and compare performance over time</div>
+
+      <div class="card">
+        <div class="week-controls">
+          <button class="btn btn-accent" onclick="archiveCurrentWeek()">Archive this week</button>
+          <span style="color:var(--muted);font-size:13px;">Compare:</span>
+          <select id="sel-week-a" onchange="renderComparison()"><option value="">Select week A</option></select>
+          <span style="color:var(--muted);">vs</span>
+          <select id="sel-week-b" onchange="renderComparison()"><option value="">Select week B</option></select>
+          <button class="btn btn-danger btn-sm" onclick="clearAllHistory()">Clear all</button>
+        </div>
+        <div id="comparison-area"><div class="empty-state">Archive weeks above, then pick two to compare.</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">All archived weeks</div>
+        <table class="data-table">
+          <thead><tr><th>Week</th><th>Tracked</th><th>Delivered</th><th>Avg days</th><th>Fastest</th><th>Slowest</th><th></th></tr></thead>
+          <tbody id="archive-tbody"><tr><td colspan="7"><div class="empty-state" style="padding:16px;">No archived weeks yet.</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div class="panel" id="panel-settings">
+      <div class="page-title">Settings</div>
+      <div class="page-sub">Configure your EasyPost connection</div>
+
+      <div class="card" style="max-width:560px;">
+        <div class="card-title">EasyPost API</div>
+        <div class="settings-form">
+          <div class="settings-label">API key</div>
+          <div style="display:flex;gap:8px;">
+            <input type="password" class="input-field input-mono" id="api-key-input" placeholder="EZTKxxxxxxxxxxxxxxxx" style="flex:1;" />
+            <button class="btn btn-primary" onclick="saveApiKey()">Save</button>
+          </div>
+          <div class="settings-label">Mode</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="test-mode-check" onchange="saveSettings()">
+            Use test API (for sandbox keys)
+          </label>
+        </div>
+        <div style="margin-top:16px;padding:12px 16px;background:var(--surface2);border-radius:var(--r-sm);font-size:12px;color:var(--muted);line-height:1.7;">
+          Your API key is stored in <strong>localStorage</strong> in your browser. It is sent directly to EasyPost's API (<code>api.easypost.com</code>) and nowhere else.<br>
+          Get your key at <a href="https://www.easypost.com/account/api-keys" target="_blank" style="color:var(--accent);">easypost.com/account/api-keys</a>
+        </div>
+        <hr class="section-divider">
+        <button class="btn btn-danger" onclick="nukeAllData()">Delete all data</button>
+        <span style="font-size:12px;color:var(--muted);margin-left:12px;">Removes all packages and archived weeks</span>
+      </div>
+
+      <div class="card" style="max-width:560px;margin-top:0;">
+        <div class="card-title">Activity log</div>
+        <div class="log-box" id="activity-log">No activity yet.</div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<div id="toast-root"></div>
+<div class="tooltip-popup" id="map-tooltip"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let packages = [];
+let archivedWeeks = [];
+let apiKey = '';
+let testMode = false;
+let log = [];
+let charts = {};
+let mapInitialized = false;
+let mapSvgSel = null;
+let usTopo = null;
+
+const STATE_ABBREVS = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO',
+  'Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID',
+  'Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA',
+  'Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN',
+  'Mississippi':'MS','Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV',
+  'New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC',
+  'North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA',
+  'Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN','Texas':'TX',
+  'Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA','West Virginia':'WV',
+  'Wisconsin':'WI','Wyoming':'WY','District of Columbia':'DC'
+};
+const ABBREV_TO_NAME = Object.fromEntries(Object.entries(STATE_ABBREVS).map(([k,v])=>[v,k]));
+
+// ─────────────────────────────────────────────
+// STORAGE (localStorage — works locally)
+// ─────────────────────────────────────────────
+function persist() {
+  try {
+    localStorage.setItem('shipsight_packages', JSON.stringify(packages));
+    localStorage.setItem('shipsight_archives', JSON.stringify(archivedWeeks));
+    localStorage.setItem('shipsight_settings', JSON.stringify({apiKey, testMode}));
+    localStorage.setItem('shipsight_log', JSON.stringify(log.slice(0,100)));
+  } catch(e) {}
+}
+
+function restore() {
+  try {
+    const p = localStorage.getItem('shipsight_packages'); if(p) packages = JSON.parse(p);
+    const a = localStorage.getItem('shipsight_archives'); if(a) archivedWeeks = JSON.parse(a);
+    const s = localStorage.getItem('shipsight_settings'); if(s){ const c=JSON.parse(s); apiKey=c.apiKey||''; testMode=!!c.testMode; }
+    const l = localStorage.getItem('shipsight_log'); if(l) log = JSON.parse(l);
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+// LOGGING
+// ─────────────────────────────────────────────
+function addLog(msg) {
+  const ts = new Date().toLocaleTimeString();
+  log.unshift(`[${ts}] ${msg}`);
+  if(log.length > 200) log.pop();
+  const el = document.getElementById('activity-log');
+  if(el) el.textContent = log.join('\n');
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+function toast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  document.getElementById('toast-root').appendChild(t);
+  setTimeout(() => t.remove(), 3800);
+}
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  if(name==='dashboard') renderDashboard();
+  if(name==='map') { renderMapTables(); if(!mapInitialized) initMap(); else updateMapFill(); }
+  if(name==='history') renderHistory();
+}
+
+// ─────────────────────────────────────────────
+// EASYPOST API
+// ─────────────────────────────────────────────
+const BASE_URL = 'https://api.easypost.com/v2';
+
+async function epFetch(path, opts={}) {
+  if(!apiKey) throw new Error('No API key. Go to Settings.');
+  const res = await fetch(BASE_URL+path, {
+    ...opts,
+    headers: {
+      'Authorization': 'Bearer '+apiKey,
+      'Content-Type': 'application/json',
+      ...(opts.headers||{})
+    }
+  });
+  if(!res.ok) {
+    let msg = 'EasyPost error '+res.status;
+    try { const e = await res.json(); msg = e.error?.message || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function createTracker(trackingNum) {
+  const resp = await fetch("/track", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      tracking_code: trackingNum
+    })
+  });
+
+  if (!resp.ok) {
+    throw new Error("Server error");
+  }
+
+  return resp.json();
+}
+
+
+async function fetchTracker(id) {
+  return epFetch('/trackers/'+id);
+}
+
+// ─────────────────────────────────────────────
+// DATA PARSING
+// ─────────────────────────────────────────────
+function parseStatus(t) {
+  const s = t.status||'';
+  if(s==='delivered') return 'delivered';
+  if(['in_transit','out_for_delivery'].includes(s)) return 'in_transit';
+  if(s==='pre_transit') return 'accepted';
+  if(s==='return_to_sender') return 'returned';
+  if(s==='failure') return 'failed';
+  return 'pending';
+}
+
+function getAccepted(t) {
+  const d = (t.tracking_details||[]);
+  const a = d.find(x=>x.status==='pre_transit') || d.find(x=>(x.message||'').toLowerCase().includes('accept'));
+  return a ? a.datetime : null;
+}
+
+function getDelivered(t) {
+  const d = (t.tracking_details||[]);
+  const x = d.find(x=>x.status==='delivered');
+  return x ? x.datetime : null;
+}
+
+function getDestState(tracker) {
+  // 1. Try carrier_detail (original)
+  let addr = tracker.carrier_detail?.destination_location;
+  if (addr) {
+    const match = addr.match(/\b[A-Z]{2}\b/);
+    if (match) return match[0];
+  }
+
+  // 2. Try tracking_details (sometimes contains location scans)
+  const details = tracker.tracking_details || [];
+  for (let d of details.reverse()) {
+    if (d.tracking_location?.state) {
+      return d.tracking_location.state;
+    }
+  }
+
+  // 3. Try shipment info (if available)
+  if (tracker.shipment?.to_address?.state) {
+    return tracker.shipment.to_address.state;
+  }
+
+  return null;
+}
+
+function transitDays(accepted, delivered) {
+  if(!accepted||!delivered) return null;
+  return +((new Date(delivered)-new Date(accepted))/86400000).toFixed(2);
+}
+
+function buildPkg(num, tracker) {
+  const status = parseStatus(tracker);
+  const accepted = getAccepted(tracker);
+  const delivered = status==='delivered' ? getDelivered(tracker) : null;
+  const destState = getDestState(tracker);
+  return {
+    trackingNum: num,
+    trackerId: tracker.id,
+    status, accepted, delivered, destState,
+    days: transitDays(accepted, delivered),
+    lastUpdated: new Date().toISOString()
+  };
+}
+
+// ─────────────────────────────────────────────
+// ACTIONS
+// ─────────────────────────────────────────────
+async function addTrackingNumbers() {
+  if(!apiKey){ toast('Set your API key in Settings first.','error'); showPanel('settings'); return; }
+  const raw = document.getElementById('tracking-input').value;
+  const nums = [...new Set(raw.split('\n').map(s=>s.trim()).filter(Boolean))];
+  if(!nums.length){ toast('Enter at least one tracking number.','error'); return; }
+
+  setSpinner(true);
+  showProgress(0, nums.length);
+  let added=0, skipped=0, failed=0;
+
+  for(let i=0; i<nums.length; i++) {
+    const num = nums[i];
+    updateProgress(i+1, nums.length, num);
+
+    if(packages.find(p=>p.trackingNum===num)){ skipped++; continue; }
+
+    try {
+      const tracker = await createTracker(num);
+      packages.push(buildPkg(num, tracker));
+      added++;
+      addLog('Tracked: '+num+' → '+parseStatus(tracker));
+    } catch(e) {
+      failed++;
+      addLog('Error tracking '+num+': '+e.message);
+    }
+
+    // ✅ ADD THIS DELAY (important)
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 1 second
+  }
+
+  setSpinner(false);
+  hideProgress();
+  document.getElementById('tracking-input').value = '';
+  persist();
+  renderPackages();
+  toast(`Added ${added}. Skipped ${skipped}. Failed ${failed}.`, failed && !added ? 'error' : 'success');
+}
+
+async function refreshAll() {
+  if(!apiKey){ toast('Set your API key first.','error'); return; }
+  const toRefresh = packages.filter(p=>p.status!=='delivered');
+  if(!toRefresh.length){ toast('All packages already delivered.','info'); return; }
+  setSpinner(true);
+  showProgress(0, toRefresh.length);
+  let updated=0;
+  for(let i=0; i<toRefresh.length; i++) {
+    const pkg = toRefresh[i];
+    updateProgress(i+1, toRefresh.length, pkg.trackingNum);
+    try {
+      const tracker = await fetchTracker(pkg.trackerId);
+      const updated_pkg = buildPkg(pkg.trackingNum, tracker);
+      Object.assign(pkg, updated_pkg);
+      updated++;
+    } catch(e) { addLog('Refresh error '+pkg.trackingNum+': '+e.message); }
+  }
+  setSpinner(false);
+  hideProgress();
+  persist();
+  renderPackages();
+  toast(`Refreshed ${updated} package(s).`, 'success');
+}
+
+function clearDelivered() {
+  const before = packages.length;
+  packages = packages.filter(p=>p.status!=='delivered');
+  persist(); renderPackages();
+  toast(`Removed ${before-packages.length} delivered package(s).`);
+}
+function clearInTransit() {
+  const before = packages.length;
+  packages = packages.filter(p=>p.status!=='in_transit');
+  persist(); renderPackages();
+  toast(`Removed ${before-packages.length} in transit package(s).`);
+}
+
+// ─────────────────────────────────────────────
+// SPINNER / PROGRESS
+// ─────────────────────────────────────────────
+function setSpinner(on) {
+  document.getElementById('track-spinner').style.display = on ? 'inline-flex' : 'none';
+}
+function showProgress(done, total) {
+  document.getElementById('progress-bar-wrap').style.display='block';
+  updateProgress(done, total, '');
+}
+function updateProgress(done, total, label) {
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.getElementById('progress-label').textContent = label ? `${done}/${total} — ${label}` : '';
+  document.getElementById('spinner-label').textContent = label ? label.slice(0,24)+'…' : 'Working…';
+}
+function hideProgress() {
+  document.getElementById('progress-bar-wrap').style.display='none';
+}
+
+// ─────────────────────────────────────────────
+// RENDER — TRACK TAB
+// ─────────────────────────────────────────────
+function statusBadge(s) {
+  const map={delivered:['badge-green','Delivered'],in_transit:['badge-blue','In transit'],
+    accepted:['badge-amber','Accepted'],returned:['badge-red','Returned'],
+    failed:['badge-red','Failed'],pending:['badge-gray','Pending']};
+  const [cls,lbl]=map[s]||['badge-gray','Unknown'];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function fmtDate(iso) {
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function renderPackages() {
+  const tbody = document.getElementById('pkg-tbody');
+  if(!packages.length) {
+    tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><div class="es-icon">📭</div>No packages yet.</div></td></tr>';
+  } else {
+    tbody.innerHTML = packages.slice().reverse().map(p=>`
+      <tr>
+        <td class="mono" style="font-size:12px;">${p.trackingNum}</td>
+        <td>${statusBadge(p.status)}</td>
+        <td style="font-size:12px;color:var(--muted);">${fmtDate(p.accepted)}</td>
+        <td style="font-size:12px;color:var(--muted);">${fmtDate(p.delivered)}</td>
+        <td style="font-size:13px;font-weight:500;">${p.days!=null?p.days.toFixed(1)+' d':'—'}</td>
+        <td style="font-size:12px;">${p.destState||'—'}</td>
+      </tr>`).join('');
+  }
+  document.getElementById('pkg-count-label').textContent = '('+packages.length+')';
+  const counts = packages.reduce((a,p)=>{a[p.status]=(a[p.status]||0)+1;return a;},{});
+  const statusEl = document.getElementById('status-counts');
+  statusEl.innerHTML = [
+    counts.delivered ? `<span class="badge badge-green">${counts.delivered} delivered</span>` : '',
+    counts.in_transit ? `<span class="badge badge-blue">${counts.in_transit} in transit</span>` : '',
+    counts.accepted ? `<span class="badge badge-amber">${counts.accepted} accepted</span>` : '',
+    counts.pending ? `<span class="badge badge-gray">${counts.pending} pending</span>` : ''
+  ].join('');
+  updateApiStatusUI();
+}
+
+function updateApiStatusUI() {
+  const dot = document.getElementById('api-status-dot');
+  const txt = document.getElementById('api-status-text');
+  if(apiKey){ dot.classList.add('connected'); txt.textContent='API connected'; }
+  else { dot.classList.remove('connected'); txt.textContent='No API key'; }
+}
+
+// ─────────────────────────────────────────────
+// RENDER — DASHBOARD
+// ─────────────────────────────────────────────
+function renderDashboard() {
+  const delivered = packages.filter(p=>p.status==='delivered');
+  const days = delivered.filter(p=>p.days!=null).map(p=>p.days);
+  const avg = days.length ? (days.reduce((a,b)=>a+b,0)/days.length) : null;
+  const fastest = days.length ? Math.min(...days) : null;
+  const rate = packages.length ? Math.round(delivered.length/packages.length*100) : 0;
+
+  document.getElementById('d-total').textContent = packages.length;
+  document.getElementById('d-delivered').textContent = delivered.length;
+  document.getElementById('d-rate').textContent = packages.length ? rate+'% delivery rate' : '—';
+  document.getElementById('d-avg').textContent = avg!=null ? avg.toFixed(1) : '—';
+  document.getElementById('d-fastest').textContent = fastest!=null ? fastest.toFixed(1) : '—';
+
+  // Transit histogram
+  const bins = [0,0,0,0,0];
+  days.forEach(d=>{ const i=Math.min(Math.floor(d),4); bins[i]++; });
+  makeChart('chart-transit','bar',['1 day','2 days','3 days','4 days','5+ days'],
+    [{label:'Packages',data:bins,backgroundColor:'#1a4fd6',borderRadius:4,borderSkipped:false}]);
+
+  // Day-of-week avg
+  const dow = [0,1,2,3,4,5,6].map(i=>{
+    const arr = delivered.filter(p=>p.accepted&&p.days!=null&&new Date(p.accepted).getDay()===i).map(p=>p.days);
+    return arr.length ? +(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2) : 0;
+  });
+  makeChart('chart-dow','bar',['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+    [{label:'Avg days',data:dow,backgroundColor:'#0f6e56',borderRadius:4,borderSkipped:false}]);
+
+  // Delivered table
+  const tbody = document.getElementById('delivered-tbody');
+  if(!delivered.length) {
+    tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">No delivered packages yet.</div></td></tr>';
+  } else {
+    tbody.innerHTML = delivered.slice().reverse().map(p=>`
+      <tr>
+        <td class="mono" style="font-size:12px;">${p.trackingNum}</td>
+        <td style="font-size:12px;color:var(--muted);">${fmtDate(p.accepted)}</td>
+        <td style="font-size:12px;color:var(--muted);">${fmtDate(p.delivered)}</td>
+        <td style="font-weight:600;">${p.days!=null?p.days.toFixed(1):' —'}</td>
+        <td>${p.destState||'—'}</td>
+      </tr>`).join('');
+  }
+}
+
+function makeChart(id, type, labels, datasets) {
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type,
+    data:{labels,datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:11},color:'#9ca3af'}},
+        x:{grid:{display:false},ticks:{font:{size:11},color:'#9ca3af'}}
+      }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// MAP
+// ─────────────────────────────────────────────
+function getStateData() {
+  const map = {};
+  packages.filter(p=>p.status==='delivered'&&p.destState&&p.days!=null).forEach(p=>{
+    if(!map[p.destState]) map[p.destState]=[];
+    map[p.destState].push(p.days);
+  });
+  const r = {};
+  for(const [st,arr] of Object.entries(map)) {
+    const avg = arr.reduce((a,b)=>a+b,0)/arr.length;
+    r[st] = {avg, min:Math.min(...arr), max:Math.max(...arr), count:arr.length};
+  }
+  return r;
+}
+
+function speedColor(days) {
+  if(days<2) return '#22c55e';
+  if(days<3) return '#84cc16';
+  if(days<4) return '#eab308';
+  if(days<5) return '#f97316';
+  return '#ef4444';
+}
+
+async function initMap() {
+  mapInitialized = true;
+  const wrap = document.getElementById('map-svg-wrap');
+  try {
+    usTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+    const stateData = getStateData();
+    wrap.innerHTML = '';
+    document.getElementById('map-loading') && document.getElementById('map-loading').remove();
+
+    const svg = d3.select('#map-svg-wrap').append('svg')
+      .attr('viewBox','0 0 960 580').attr('width','100%').attr('id','map-svg');
+    const proj = d3.geoAlbersUsa().scale(1280).translate([480,290]);
+    const path = d3.geoPath(proj);
+    const features = topojson.feature(usTopo, usTopo.objects.states).features;
+    const tooltip = document.getElementById('map-tooltip');
+
+    svg.selectAll('path').data(features).join('path')
+      .attr('d', path)
+      .attr('stroke','#fff').attr('stroke-width',0.7)
+      .attr('fill', d=>{
+        const abbr = STATE_ABBREVS[d.properties.name];
+        return abbr&&stateData[abbr] ? speedColor(stateData[abbr].avg) : '#e5e7eb';
+      })
+      .attr('class','state-path')
+      .style('cursor','pointer')
+      .on('mousemove', (event,d)=>{
+        const abbr = STATE_ABBREVS[d.properties.name];
+        const sd = abbr && stateData[abbr];
+        tooltip.style.display='block';
+        tooltip.style.left=(event.clientX+12)+'px';
+        tooltip.style.top=(event.clientY-28)+'px';
+        tooltip.textContent = sd
+          ? `${d.properties.name}: ${sd.avg.toFixed(1)} avg days (${sd.count} pkg${sd.count>1?'s':''})`
+          : `${d.properties.name}: no data`;
+      })
+      .on('mouseleave', ()=>{ tooltip.style.display='none'; });
+
+    mapSvgSel = svg;
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state">Map failed to load: ${e.message}</div>`;
+  }
+}
+
+function updateMapFill() {
+  if(!mapSvgSel) return;
+  const stateData = getStateData();
+  mapSvgSel.selectAll('.state-path').attr('fill', d=>{
+    const abbr = STATE_ABBREVS[d.properties.name];
+    return abbr&&stateData[abbr] ? speedColor(stateData[abbr].avg) : '#e5e7eb';
+  });
+}
+
+function renderMapTables() {
+  const stateData = getStateData();
+  const entries = Object.entries(stateData).sort((a,b)=>a[1].avg-b[1].avg);
+  const fastest = entries.slice(0,8);
+  const slowest = entries.slice(-8).reverse();
+
+  const buildRows = (arr) => arr.map(([abbr,d])=>`
+    <tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${speedColor(d.avg)};margin-right:6px;"></span>${ABBREV_TO_NAME[abbr]||abbr}</td>
+      <td>${d.count}</td>
+      <td style="font-weight:600;">${d.avg.toFixed(1)}</td>
+    </tr>`).join('');
+
+  const emptyRow = '<tr><td colspan="3"><div class="empty-state" style="padding:12px;">No data yet.</div></td></tr>';
+  document.getElementById('fastest-tbody').innerHTML = fastest.length ? buildRows(fastest) : emptyRow;
+  document.getElementById('slowest-tbody').innerHTML = slowest.length ? buildRows(slowest) : emptyRow;
+}
+
+// ─────────────────────────────────────────────
+// HISTORY
+// ─────────────────────────────────────────────
+function weekKey(date) {
+  const d = new Date(date);
+  const mon = new Date(d);
+  mon.setDate(d.getDate()-((d.getDay()+6)%7));
+  return mon.toISOString().slice(0,10);
+}
+function weekLabel(key) {
+  const d = new Date(key+'T00:00:00');
+  const end = new Date(d); end.setDate(d.getDate()+6);
+  const fmt = dt => dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  return fmt(d)+' – '+fmt(end);
+}
+
+function currentSnapshot() {
+  const delivered = packages.filter(p=>p.status==='delivered');
+  const days = delivered.filter(p=>p.days!=null).map(p=>p.days);
+  return {
+    total: packages.length,
+    delivered: delivered.length,
+    avgDays: days.length ? +(days.reduce((a,b)=>a+b,0)/days.length).toFixed(2) : null,
+    fastest: days.length ? +Math.min(...days).toFixed(2) : null,
+    slowest: days.length ? +Math.max(...days).toFixed(2) : null
+  };
+}
+
+function archiveCurrentWeek() {
+  const key = weekKey(new Date());
+  const snap = currentSnapshot();
+  const idx = archivedWeeks.findIndex(w=>w.key===key);
+  const entry = {key, snap, archived:new Date().toISOString()};
+  if(idx>=0) archivedWeeks[idx]=entry; else archivedWeeks.push(entry);
+  archivedWeeks.sort((a,b)=>b.key.localeCompare(a.key));
+  persist();
+  renderHistory();
+  toast('Week archived: '+weekLabel(key),'success');
+  addLog('Archived week: '+weekLabel(key));
+}
+
+function renderHistory() {
+  const selA = document.getElementById('sel-week-a');
+  const selB = document.getElementById('sel-week-b');
+  const prevA = selA.value, prevB = selB.value;
+  const opts = archivedWeeks.map(w=>`<option value="${w.key}">${weekLabel(w.key)}</option>`).join('');
+  selA.innerHTML = '<option value="">Week A</option>'+opts;
+  selB.innerHTML = '<option value="">Week B</option>'+opts;
+  if(prevA) selA.value=prevA;
+  if(prevB) selB.value=prevB;
+
+  const tbody = document.getElementById('archive-tbody');
+  if(!archivedWeeks.length) {
+    tbody.innerHTML='<tr><td colspan="7"><div class="empty-state" style="padding:16px;">No archived weeks yet.</div></td></tr>';
+  } else {
+    tbody.innerHTML = archivedWeeks.map(w=>`
+      <tr>
+        <td style="font-weight:500;">${weekLabel(w.key)}</td>
+        <td>${w.snap.total}</td>
+        <td>${w.snap.delivered}</td>
+        <td>${w.snap.avgDays!=null?w.snap.avgDays.toFixed(1)+'d':'—'}</td>
+        <td style="color:var(--green);">${w.snap.fastest!=null?w.snap.fastest.toFixed(1)+'d':'—'}</td>
+        <td style="color:var(--red);">${w.snap.slowest!=null?w.snap.slowest.toFixed(1)+'d':'—'}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteArchive('${w.key}')">Delete</button></td>
+      </tr>`).join('');
+  }
+  renderComparison();
+}
+
+function renderComparison() {
+  const keyA = document.getElementById('sel-week-a').value;
+  const keyB = document.getElementById('sel-week-b').value;
+  const area = document.getElementById('comparison-area');
+  if(!keyA||!keyB) {
+    area.innerHTML='<div class="empty-state">Select two weeks above to compare side by side.</div>';
+    return;
+  }
+  const wA = archivedWeeks.find(w=>w.key===keyA);
+  const wB = archivedWeeks.find(w=>w.key===keyB);
+  if(!wA||!wB) return;
+
+  const cmpCard = (label, a, b, higherBetter) => {
+    const diff = (a!=null&&b!=null) ? a-b : null;
+    const fmt = v => v!=null ? (Number.isInteger(v)?v:v.toFixed(1)) : '—';
+    let deltaCls='delta-same', deltaLabel='—';
+    if(diff!=null && Math.abs(diff)>0.005) {
+      const better = higherBetter ? diff>0 : diff<0;
+      deltaCls = better?'delta-up':'delta-down';
+      deltaLabel = (diff>0?'+':'')+diff.toFixed(1);
+    }
+    return `<div class="cmp-card">
+      <div class="cmp-label">${label}</div>
+      <div class="cmp-vals">
+        <span class="cmp-a">${fmt(a)}</span>
+        <span class="cmp-b">vs ${fmt(b)}</span>
+      </div>
+      <span class="cmp-delta ${deltaCls}">${deltaLabel}</span>
+    </div>`;
+  };
+
+  area.innerHTML = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--muted);">
+      <strong style="color:var(--text);">${weekLabel(keyA)}</strong> vs <strong style="color:var(--text);">${weekLabel(keyB)}</strong>
+    </div>
+    <div class="week-compare-grid">
+      ${cmpCard('Packages tracked',wA.snap.total,wB.snap.total,true)}
+      ${cmpCard('Delivered',wA.snap.delivered,wB.snap.delivered,true)}
+      ${cmpCard('Avg transit days',wA.snap.avgDays,wB.snap.avgDays,false)}
+      ${cmpCard('Fastest delivery',wA.snap.fastest,wB.snap.fastest,false)}
+    </div>`;
+}
+
+async function deleteArchive(key) {
+  archivedWeeks = archivedWeeks.filter(w=>w.key!==key);
+  persist(); renderHistory(); toast('Archive deleted.');
+}
+
+async function clearAllHistory() {
+  if(!confirm('Delete all archived weeks?')) return;
+  archivedWeeks=[]; persist(); renderHistory(); toast('History cleared.');
+}
+
+// ─────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────
+function saveApiKey() {
+  apiKey = document.getElementById('api-key-input').value.trim();
+  saveSettings();
+  updateApiStatusUI();
+  addLog('API key updated.');
+  toast('API key saved.','success');
+}
+
+function saveSettings() {
+  testMode = document.getElementById('test-mode-check').checked;
+  persist();
+}
+
+function nukeAllData() {
+  if(!confirm('Delete ALL packages, archives, and settings? This cannot be undone.')) return;
+  packages=[]; archivedWeeks=[]; log=[];
+  localStorage.clear();
+  renderPackages();
+  toast('All data cleared.','info');
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+function init() {
+  restore();
+  if(apiKey) document.getElementById('api-key-input').value=apiKey;
+  document.getElementById('test-mode-check').checked=testMode;
+  updateApiStatusUI();
+  renderPackages();
+  const el = document.getElementById('activity-log');
+  if(el) el.textContent = log.join('\n') || 'No activity yet.';
+  addLog('App started.');
+}
+
+init();
+</script>
+</body>
+</html>
