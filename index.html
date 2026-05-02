@@ -487,6 +487,9 @@
       <div class="card">
         <div class="week-controls">
           <button class="btn btn-accent" onclick="archiveCurrentWeek()">Archive this week</button>
+		  <button class="btn" onclick="navigator.clipboard.writeText(JSON.stringify(packages))">
+  Copy current data
+</button>
           <span style="color:var(--muted);font-size:13px;">Compare:</span>
           <select id="sel-week-a" onchange="renderComparison()"><option value="">Select week A</option></select>
           <span style="color:var(--muted);">vs</span>
