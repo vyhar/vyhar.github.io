@@ -486,7 +486,11 @@
 
       <div class="card">
         <div class="week-controls">
-          <button class="btn btn-accent" onclick="archiveCurrentWeek()">Archive this week</button>
+          <input type="date" id="current-week-date" class="input-field" style="max-width:160px;">
+
+<button class="btn btn-accent" onclick="archiveCurrentWeek(document.getElementById('current-week-date').value)">
+  Archive this week
+</button>
 		  <button class="btn" onclick="navigator.clipboard.writeText(JSON.stringify(packages))">
   Copy current data
 </button>
@@ -1191,8 +1195,8 @@ function archiveImportedWeek(customDate) {
 }
 
 // ---------- Archive Current Week ----------
-function archiveCurrentWeek() {
-  const key = weekKey(new Date());
+function archiveCurrentWeek(customDate) {
+  const key = (customDate || new Date()).toISOString().slice(0, 10);
   const snap = snapshotFrom(packages);
 
   const idx = archivedWeeks.findIndex(w => w.key === key);
