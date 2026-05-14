@@ -831,26 +831,54 @@ function buildPkg(num, tracker, manualAccepted) {
 }
 
 async function refreshAll() {
-  if(!apiKey){ toast('Set your API key first.','error'); return; }
-  const toRefresh = packages.filter(p=>p.status!=='delivered');
-  if(!toRefresh.length){ toast('All packages already delivered.','info'); return; }
+  if(!apiKey){
+    toast('Set your API key first.','error');
+    return;
+  }
+
+  const toRefresh = packages.filter(p => p.status !== 'delivered');
+
+  if(!toRefresh.length){
+    toast('All packages already delivered.','info');
+    return;
+  }
+
   setSpinner(true);
   showProgress(0, toRefresh.length);
-  let updated=0;
-  for(let i=0; i<toRefresh.length; i++) {
+
+  let updated = 0;
+
+  for(let i = 0; i < toRefresh.length; i++) {
     const pkg = toRefresh[i];
-    updateProgress(i+1, toRefresh.length, pkg.trackingNum);
+
+    updateProgress(i + 1, toRefresh.length, pkg.trackingNum);
+
     try {
-      const tracker = await fetchTracker(pkg.trackerId);
-      const updated_pkg = buildPkg(pkg.trackingNum, tracker);
+      const tracker = await fetchTracker(pkg.trackingNum);
+
+      const updated_pkg = buildPkg(
+        pkg.trackingNum,
+        tracker,
+        pkg.accepted
+      );
+
       Object.assign(pkg, updated_pkg);
+
       updated++;
-    } catch(e) { addLog('Refresh error '+pkg.trackingNum+': '+e.message); }
+
+      await new Promise(r => setTimeout(r, 1200));
+
+    } catch(e) {
+      addLog('Refresh error ' + pkg.trackingNum + ': ' + e.message);
+    }
   }
+
   setSpinner(false);
   hideProgress();
+
   persist();
   renderPackages();
+
   toast(`Refreshed ${updated} package(s).`, 'success');
 }
 
