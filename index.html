@@ -701,9 +701,28 @@ async function createTracker(trackingNum) {
 }
 
 
-async function fetchTracker(id) {
-  return epFetch('/trackers/'+id);
+async function fetchTracker(trackingCode) {
+  const resp = await fetch(
+    "https://vyhar-github-io-1.onrender.com/track",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        tracking_code: trackingCode
+      })
+    }
+  );
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(text || "Refresh failed");
+  }
+
+  return resp.json();
 }
+
 
 // ─────────────────────────────────────────────
 // DATA PARSING
@@ -869,9 +888,15 @@ async function refreshAll() {
       await new Promise(r => setTimeout(r, 1200));
 
     } catch(e) {
-      addLog('Refresh error ' + pkg.trackingNum + ': ' + e.message);
-    }
-  }
+  console.error(e);
+
+  addLog('Refresh error ' + pkg.trackingNum + ': ' + e.message);
+
+  toast(
+    'Refresh failed for ' + pkg.trackingNum,
+    'error'
+  );
+}
 
   setSpinner(false);
   hideProgress();
