@@ -855,7 +855,9 @@ async function refreshAll() {
     return;
   }
 
-  const toRefresh = packages.filter(p => p.status !== 'delivered');
+  const toRefresh = packages.filter(
+    p => p.status !== 'delivered'
+  );
 
   if(!toRefresh.length){
     toast('All packages already delivered.','info');
@@ -868,12 +870,20 @@ async function refreshAll() {
   let updated = 0;
 
   for(let i = 0; i < toRefresh.length; i++) {
+
     const pkg = toRefresh[i];
 
-    updateProgress(i + 1, toRefresh.length, pkg.trackingNum);
+    updateProgress(
+      i + 1,
+      toRefresh.length,
+      pkg.trackingNum
+    );
 
     try {
-      const tracker = await fetchTracker(pkg.trackingNum);
+
+      const tracker = await fetchTracker(
+        pkg.trackingNum
+      );
 
       const updated_pkg = buildPkg(
         pkg.trackingNum,
@@ -885,26 +895,41 @@ async function refreshAll() {
 
       updated++;
 
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r =>
+        setTimeout(r, 1200)
+      );
 
     } catch(e) {
-  console.error(e);
 
-  addLog('Refresh error ' + pkg.trackingNum + ': ' + e.message);
+      console.error(e);
 
-  toast(
-    'Refresh failed for ' + pkg.trackingNum,
-    'error'
-  );
-}
+      addLog(
+        'Refresh error ' +
+        pkg.trackingNum +
+        ': ' +
+        e.message
+      );
+
+      toast(
+        'Refresh failed for ' +
+        pkg.trackingNum,
+        'error'
+      );
+    }
+  }
 
   setSpinner(false);
+
   hideProgress();
 
   persist();
+
   renderPackages();
 
-  toast(`Refreshed ${updated} package(s).`, 'success');
+  toast(
+    `Refreshed ${updated} package(s).`,
+    'success'
+  );
 }
 
 function clearDelivered() {
