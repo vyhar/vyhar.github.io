@@ -373,6 +373,8 @@
           <button class="btn btn-primary" onclick="addTrackingNumbers()">Track packages</button>
           <button class="btn" onclick="refreshAll()">↻ Refresh all</button>
           <button class="btn" onclick="clearDelivered()">Clear delivered</button>
+		  <button class="btn" onclick="clearAccepted()">Clear accepted</button>
+		  <button class="btn" onclick="clearPending()">Clear pending</button>
 		   <button class="btn" onclick="clearInTransit()">Clear in transit</button>
           <span id="track-spinner" style="display:none;"><span class="spinner"></span> <span id="spinner-label" style="font-size:12px;color:var(--muted);">Working…</span></span>
         </div>
@@ -857,6 +859,18 @@ function clearDelivered() {
   packages = packages.filter(p=>p.status!=='delivered');
   persist(); renderPackages();
   toast(`Removed ${before-packages.length} delivered package(s).`);
+}
+function clearPending() {
+  const before = packages.length;
+  packages = packages.filter(p=>p.status!=='pending');
+  persist(); renderPackages();
+  toast(`Removed ${before-packages.length} pending package(s).`);
+}
+function clearAccepted() {
+  const before = packages.length;
+  packages = packages.filter(p=>p.status!=='accepted');
+  persist(); renderPackages();
+  toast(`Removed ${before-packages.length} Accepted package(s).`);
 }
 function clearInTransit() {
   const before = packages.length;
